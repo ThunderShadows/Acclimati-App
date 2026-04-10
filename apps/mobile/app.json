@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Acclimate",
+    "slug": "acclimate",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.acclimate.app"
+    },
+    "android": {
+      "package": "com.acclimate.app"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
+}

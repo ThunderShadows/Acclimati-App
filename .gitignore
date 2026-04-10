@@ -1,7 +1,10 @@
-  node_modules/                                                                                                                                          
-  dist/                                                                                                                                                
-  .turbo/
-  .env
-  .env.local
-  *.log
-  
+node_modules/
+dist/
+.turbo/
+.env
+.env.local
+*.log
+
+# Seeder output — commit only after manual review
+apps/seeder/output/cities.json
+
