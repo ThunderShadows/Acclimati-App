@@ -1,94 +1,29 @@
 import React, { useState, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, SafeAreaView, StatusBar, Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { UserProfile } from '@acclimate/engine';
-import { Colors, Font, Radius, Spacing } from '../theme';
+import { Colors, Radius, Spacing } from '../theme';
 import { loadProfile, clearProfile } from '../storage';
 import type { RootStackParamList } from '../../App';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-// ─── Label maps ───────────────────────────────────────────────────────────────
-
-const AGE_LABELS: Record<string, string> = {
-  under_18: 'Under 18',
-  '18_35':  '18–35',
-  '35_55':  '35–55',
-  '55_plus': '55+',
-};
-const FITNESS_LABELS: Record<string, string> = {
-  sedentary: 'Sedentary',
-  moderate:  'Moderate',
-  active:    'Active',
-  athlete:   'Athlete',
-};
-const DIET_LABELS: Record<string, string> = {
-  vegetarian:     'Vegetarian',
-  non_vegetarian: 'Non-vegetarian',
-  vegan:          'Vegan',
-};
-const HYDRATION_LABELS: Record<string, string> = {
-  low:      'Less than 1L',
-  moderate: '1–2L',
-  high:     'More than 2L',
-};
-const ALLERGY_LABELS: Record<string, string> = {
-  none:              'None',
-  dust:              'Dust / Mould',
-  pollen:            'Pollen',
-  prefer_not_to_say: 'Prefer not to say',
-};
-const TRAVEL_MODE_LABELS: Record<string, string> = {
-  flight: '✈️ Flight',
-  train:  '🚆 Train',
-  road:   '🚗 Road',
-};
-const ACTIVITY_LABELS: Record<string, string> = {
-  office:      'Office work',
-  sightseeing: 'Sightseeing',
-  trekking:    'Trekking',
-  pilgrimage:  'Pilgrimage',
-  sports:      'Sports',
-};
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.sectionCard}>{children}</View>
-    </View>
-  );
+function profileLabel(profile: UserProfile | null) {
+  if (!profile) return [];
+  return [
+    { label: 'Age group',   value: profile.age_group?.replace('_', '–') ?? '—' },
+    { label: 'Activity',    value: profile.fitness_level ?? '—' },
+    { label: 'Conditions',  value: [
+        profile.has_cardiac_condition && 'Heart condition',
+        profile.has_respiratory_condition && 'Respiratory',
+        profile.is_recovering_from_illness && 'Recovering',
+      ].filter(Boolean).join(', ') || 'None' },
+    { label: 'Travel mode', value: profile.travel_mode ?? '—' },
+    { label: 'Recovery',    value: profile.is_recovering_from_illness ? 'Recovering' : 'Feeling 100%' },
+  ];
 }
-
-function ProfileRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
-}
-
-function BoolRow({ label, value }: { label: string; value: boolean }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <View style={[styles.boolBadge, { backgroundColor: value ? '#FEF2F2' : '#F0FDF4' }]}>
-        <Text style={[styles.boolText, { color: value ? '#991B1B' : '#166534' }]}>
-          {value ? 'Yes' : 'No'}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
 
 export function ProfileScreen() {
   const navigation = useNavigation<NavProp>();
@@ -98,113 +33,93 @@ export function ProfileScreen() {
     loadProfile().then(setProfile);
   }, []));
 
-  async function handleClear() {
-    Alert.alert(
-      'Clear Profile',
-      'This will permanently delete your saved health profile. You can always create a new one.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await clearProfile();
-            setProfile(null);
-          },
-        },
-      ]
-    );
+  function handleClear() {
+    Alert.alert('Clear all data', 'This will erase your health profile and trip history from this device.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear', style: 'destructive',
+        onPress: async () => { await clearProfile(); setProfile(null); },
+      },
+    ]);
   }
 
+  const rows = profileLabel(profile);
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Your Health Profile</Text>
-          <Text style={styles.subtitle}>Stored securely on your device</Text>
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg}/>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
+        <View style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 10 }}>
+          <Text style={styles.title}>You</Text>
         </View>
 
-        {profile == null ? (
-          /* Empty state */
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>🩺</Text>
-            <Text style={styles.emptyTitle}>No profile yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Complete a health questionnaire to personalise your trip recommendations.
-            </Text>
+        {/* Dark hero card */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroBg}/>
+          <View style={styles.avatar}>
+            <Text style={{ fontSize: 22, fontWeight: '600', color: Colors.primary }}>T</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.heroName}>Traveler</Text>
+            <Text style={styles.heroPrivacy}>🔒  On-device · encrypted</Text>
+          </View>
+        </View>
+
+        {/* Health profile */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 18 }}>
+          <View style={styles.sectionRow}>
+            <Text style={styles.sectionLabel}>HEALTH PROFILE</Text>
             <TouchableOpacity
-              style={styles.editBtn}
-              onPress={() => navigation.navigate('CityPicker')}
-              activeOpacity={0.85}
+              onPress={() => navigation.navigate('Questionnaire', {
+                originId: '', originName: '', destId: '', destName: '', month: 1, profileOnly: true,
+              })}
             >
-              <Text style={styles.editBtnText}>Complete your profile</Text>
+              <Text style={styles.editBtn}>✏ Edit</Text>
             </TouchableOpacity>
           </View>
-        ) : (
-          <>
-            {/* About You */}
-            <ProfileSection title="About You">
-              <ProfileRow label="Age group"    value={AGE_LABELS[profile.age_group]    ?? profile.age_group} />
-              <ProfileRow label="Fitness level" value={FITNESS_LABELS[profile.fitness_level] ?? profile.fitness_level} />
-            </ProfileSection>
+          <View style={styles.card}>
+            {rows.map((r, i) => (
+              <View key={i} style={[styles.row, i < rows.length - 1 && { borderBottomWidth: 1, borderBottomColor: Colors.line }]}>
+                <Text style={styles.rowLabel}>{r.label}</Text>
+                <Text style={styles.rowValue}>{r.value}</Text>
+              </View>
+            ))}
+            {rows.length === 0 && (
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>No profile yet</Text>
+                <Text style={styles.rowValue}>—</Text>
+              </View>
+            )}
+          </View>
+        </View>
 
-            {/* Health */}
-            <ProfileSection title="Health Conditions">
-              <BoolRow label="Cardiac condition"      value={profile.has_cardiac_condition} />
-              <BoolRow label="Respiratory condition"  value={profile.has_respiratory_condition} />
-              <BoolRow label="Recovering from illness" value={profile.is_recovering_from_illness} />
-              <BoolRow label="Sleep sensitive"        value={profile.is_sleep_sensitive} />
-            </ProfileSection>
+        {/* Settings */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 18 }}>
+          <Text style={styles.sectionLabel}>SETTINGS</Text>
+          <View style={styles.card}>
+            {[
+              { label: 'Notifications', sub: 'Daily prep reminders' },
+              { label: 'Privacy policy', sub: 'How your data stays yours' },
+              { label: 'About Acclimate', sub: 'Version 1.0' },
+            ].map((s, i, arr) => (
+              <View key={i} style={[styles.settingRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: Colors.line }]}>
+                <View>
+                  <Text style={styles.settingLabel}>{s.label}</Text>
+                  <Text style={styles.settingSub}>{s.sub}</Text>
+                </View>
+                <Text style={{ color: Colors.inkFaint, fontSize: 18 }}>›</Text>
+              </View>
+            ))}
+          </View>
+        </View>
 
-            {/* Allergies */}
-            <ProfileSection title="Allergies">
-              <ProfileRow label="Known allergies" value={ALLERGY_LABELS[profile.allergy_type] ?? profile.allergy_type} />
-            </ProfileSection>
-
-            {/* Travel preferences */}
-            <ProfileSection title="Travel Preferences">
-              <ProfileRow label="Travel mode"   value={TRAVEL_MODE_LABELS[profile.travel_mode] ?? profile.travel_mode} />
-              <ProfileRow label="Main activity" value={ACTIVITY_LABELS[profile.activity_type]  ?? profile.activity_type} />
-              <ProfileRow label="Stay duration" value={`${profile.stay_duration_days} days`} />
-              <BoolRow    label="AC accommodation" value={profile.has_ac_accommodation} />
-            </ProfileSection>
-
-            {/* Lifestyle */}
-            <ProfileSection title="Lifestyle">
-              <ProfileRow label="Diet"       value={DIET_LABELS[profile.diet_type]           ?? profile.diet_type} />
-              <ProfileRow label="Hydration"  value={HYDRATION_LABELS[profile.hydration_level] ?? profile.hydration_level} />
-            </ProfileSection>
-
-            {/* Actions */}
-            <TouchableOpacity
-              style={styles.editBtn}
-              onPress={() => navigation.navigate('CityPicker')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.editBtnText}>Edit Profile</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.clearBtn}
-              onPress={handleClear}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.clearBtnText}>Clear Profile</Text>
-            </TouchableOpacity>
-
-            {/* Privacy note */}
-            <View style={styles.privacyCard}>
-              <Text style={styles.privacyText}>
-                🔐 Encrypted on-device. Never transmitted.
-              </Text>
-            </View>
-          </>
-        )}
+        {/* Danger zone */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 32 }}>
+          <TouchableOpacity style={styles.clearBtn} onPress={handleClear} activeOpacity={0.8}>
+            <Text style={styles.clearText}>🗑  Clear all data</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -212,138 +127,54 @@ export function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: Colors.bg },
-  scroll: { padding: Spacing.lg, paddingBottom: Spacing.xxl },
+  scroll: { paddingBottom: 32 },
+  title:  { fontSize: 26, fontWeight: '500', color: Colors.ink },
 
-  header: { marginBottom: Spacing.xl },
-  title:  {
-    fontSize:   Font.size.xxl,
-    fontWeight: Font.weight.bold,
-    color:      Colors.text,
-    marginBottom: 4,
+  heroCard: {
+    marginHorizontal: 20, borderRadius: 18,
+    backgroundColor: Colors.primary, padding: 18,
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    overflow: 'hidden',
   },
-  subtitle: {
-    fontSize: Font.size.sm,
-    color:    Colors.textMuted,
+  heroBg: {
+    position: 'absolute', right: -30, top: -30,
+    width: 140, height: 140, borderRadius: 70,
+    backgroundColor: Colors.bright, opacity: 0.15,
   },
+  avatar: {
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: Colors.bright,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  heroName:    { fontSize: 18, fontWeight: '500', color: '#F6F3EC' },
+  heroPrivacy: { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 3 },
 
-  // Empty state
-  emptyContainer: {
-    alignItems:     'center',
-    paddingVertical: Spacing.xxl,
-  },
-  emptyEmoji: {
-    fontSize:    56,
-    marginBottom: Spacing.lg,
-  },
-  emptyTitle: {
-    fontSize:    Font.size.xl,
-    fontWeight:  Font.weight.bold,
-    color:       Colors.text,
-    marginBottom: Spacing.sm,
-  },
-  emptySubtitle: {
-    fontSize:    Font.size.md,
-    color:       Colors.textMuted,
-    textAlign:   'center',
-    lineHeight:  22,
-    marginBottom: Spacing.xl,
-    paddingHorizontal: Spacing.md,
-  },
+  sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  sectionLabel: { fontSize: 11, color: Colors.inkFaint, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '600' },
+  editBtn: { fontSize: 12, fontWeight: '500', color: Colors.mid },
 
-  // Sections
-  section:     { marginBottom: Spacing.md },
-  sectionTitle: {
-    fontSize:    Font.size.xs,
-    fontWeight:  Font.weight.bold,
-    color:       Colors.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: Spacing.sm,
+  card: {
+    backgroundColor: Colors.surface, borderRadius: 16,
+    borderWidth: 1, borderColor: Colors.line, overflow: 'hidden',
   },
-  sectionCard: {
-    backgroundColor: Colors.card,
-    borderRadius:    Radius.lg,
-    paddingHorizontal: Spacing.md,
-    shadowColor:     '#000',
-    shadowOpacity:   0.04,
-    shadowRadius:    8,
-    shadowOffset:    { width: 0, height: 2 },
-    elevation:       2,
-  },
-
-  // Rows
   row: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    justifyContent:  'space-between',
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.separator,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 12, gap: 12,
   },
-  rowLabel: {
-    fontSize:   Font.size.sm,
-    color:      Colors.textMuted,
-    flex:       1,
-  },
-  rowValue: {
-    fontSize:   Font.size.sm,
-    fontWeight: Font.weight.medium,
-    color:      Colors.text,
-    textAlign:  'right',
-  },
-  boolBadge: {
-    borderRadius:      Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical:   3,
-  },
-  boolText: {
-    fontSize:   Font.size.xs,
-    fontWeight: Font.weight.semibold,
-  },
+  rowLabel: { fontSize: 13, color: Colors.inkSoft },
+  rowValue: { fontSize: 13, fontWeight: '500', color: Colors.ink, textAlign: 'right', maxWidth: '60%' },
 
-  // Buttons
-  editBtn: {
-    backgroundColor: Colors.mid,
-    borderRadius:    Radius.lg,
-    paddingVertical:  16,
-    alignItems:      'center',
-    marginTop:       Spacing.md,
-    shadowColor:     Colors.mid,
-    shadowOpacity:   0.3,
-    shadowRadius:    8,
-    shadowOffset:    { width: 0, height: 3 },
-    elevation:       4,
+  settingRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 13,
   },
-  editBtnText: {
-    fontSize:   Font.size.md,
-    fontWeight: Font.weight.semibold,
-    color:      Colors.textOnDark,
-  },
+  settingLabel: { fontSize: 14, fontWeight: '500', color: Colors.ink },
+  settingSub:   { fontSize: 11, color: Colors.inkFaint, marginTop: 2 },
+
   clearBtn: {
-    borderWidth:     1.5,
-    borderColor:     Colors.coral,
-    borderRadius:    Radius.lg,
-    paddingVertical:  14,
-    alignItems:      'center',
-    marginTop:       Spacing.md,
+    height: 48, borderRadius: 12,
+    borderWidth: 1, borderColor: Colors.line,
+    alignItems: 'center', justifyContent: 'center',
   },
-  clearBtnText: {
-    fontSize:   Font.size.md,
-    fontWeight: Font.weight.semibold,
-    color:      Colors.coral,
-  },
-
-  // Privacy
-  privacyCard: {
-    backgroundColor: Colors.card,
-    borderRadius:    Radius.md,
-    padding:         Spacing.md,
-    marginTop:       Spacing.lg,
-    alignItems:      'center',
-    borderWidth:     1,
-    borderColor:     Colors.border,
-  },
-  privacyText: {
-    fontSize: Font.size.xs,
-    color:    Colors.textMuted,
-  },
+  clearText: { fontSize: 13, fontWeight: '600', color: Colors.coral },
 });

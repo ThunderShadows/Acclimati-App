@@ -1,114 +1,100 @@
-/**
- * ResultScreen — tabbed result screen with Overview, Timeline, Risks tabs.
- * Saves trip to history on successful load.
- */
-
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, SafeAreaView,
+  View, Text, StyleSheet, ScrollView,
   TouchableOpacity, ActivityIndicator, StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { generateRecommendation } from '@acclimate/engine';
 import type { RecommendationCard, RiskLevel, TimelineItem } from '@acclimate/engine';
 import { fetchCities } from '../api';
 import { RiskBadge } from '../components/RiskBadge';
-import { Colors, Font, Radius, Spacing } from '../theme';
+import { RouteArc, ElevationChart } from '../components/RouteArc';
+import { WeatherSticker } from '../components/WeatherSticker';
+import { Colors, Radius, Spacing } from '../theme';
 import { MONTHS } from '../cities';
 import { addTripRecord } from '../storage';
 import type { RootStackParamList } from '../../App';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Result'>;
-type ActiveTab = 'overview' | 'timeline' | 'risks';
+type Tab = 'Overview' | 'Timeline' | 'Risks';
 
-const RISK_DOMAIN_LABELS: Record<string, string> = {
-  altitude:         'Altitude',
-  humidity_shock:   'Humidity',
-  heat_stress:      'Heat stress',
-  cold_stress:      'Cold stress',
-  air_quality:      'Air quality',
-  uv_exposure:      'UV exposure',
-  pollen_exposure:  'Pollen',
-  gi_transition:    'GI / Stomach',
-  sleep_disruption: 'Sleep',
-  thermoregulation: 'Temp shift',
-  vector_disease:   'Vector disease',
+const DOMAIN_LABELS: Record<string, string> = {
+  altitude: 'Altitude', humidity_shock: 'Humidity shift', heat_stress: 'Heat stress',
+  cold_stress: 'Cold stress', air_quality: 'Air quality', uv_exposure: 'UV exposure',
+  pollen_exposure: 'Pollen', gi_transition: 'Digestion', sleep_disruption: 'Sleep',
+  thermoregulation: 'Thermoregulation', vector_disease: 'Vector disease',
 };
 
-const RISK_DOMAIN_ICONS: Record<string, string> = {
-  altitude:         '⛰️',
-  humidity_shock:   '💧',
-  heat_stress:      '🌡️',
-  cold_stress:      '🧊',
-  air_quality:      '🌫️',
-  uv_exposure:      '☀️',
-  pollen_exposure:  '🌸',
-  gi_transition:    '🥗',
-  sleep_disruption: '😴',
-  thermoregulation: '🌡',
-  vector_disease:   '🦟',
+const DOMAIN_ICONS: Record<string, string> = {
+  altitude: '⛰', humidity_shock: '💧', heat_stress: '🌡', cold_stress: '🧊',
+  air_quality: '🌬', uv_exposure: '☀', pollen_exposure: '🌿', gi_transition: '🥗',
+  sleep_disruption: '🌙', thermoregulation: '⚡', vector_disease: '🦟',
+};
+
+const DOMAIN_DESC: Record<string, string> = {
+  altitude: 'Thinner air above 1,500 m', humidity_shock: 'Moisture level change',
+  heat_stress: 'Daytime temperature load', cold_stress: 'Low-temp exposure',
+  air_quality: 'Particulate & ozone delta', uv_exposure: 'Skin & eye burn risk',
+  pollen_exposure: 'Seasonal airborne allergens', gi_transition: 'Diet & microbiome change',
+  sleep_disruption: 'Circadian adjustment', thermoregulation: 'Body heat balance',
+  vector_disease: 'Mosquito-borne illness',
 };
 
 const PHASE_LABELS: Record<string, string> = {
-  days_before:   'Before you travel',
-  day_of_travel: 'Day of travel',
-  first_3_days:  'First 3 days',
-  ongoing:       'Ongoing',
+  days_before: 'Before you go', day_of_travel: 'Travel day',
+  first_3_days: 'First 3 days', ongoing: 'While you are there',
 };
 
-const PHASE_COLORS: Record<string, string> = {
-  days_before:   '#3B82F6',
-  day_of_travel: '#8B5CF6',
-  first_3_days:  '#10B981',
-  ongoing:       '#6B7280',
+const RISK_HERO: Record<string, { bg: string; color: string; msg: string }> = {
+  none:     { bg: '#D7ECDF', color: '#2E8266', msg: 'Enjoy the trip.' },
+  low:      { bg: '#F2E6B7', color: '#7A6416', msg: 'Stay mindful.' },
+  moderate: { bg: '#F6D9B8', color: '#B06528', msg: 'Prep ahead.' },
+  high:     { bg: '#F5C9BF', color: '#B0362B', msg: 'Plan carefully.' },
+  severe:   { bg: '#E3CEED', color: '#6B3A8F', msg: 'Consult a doctor.' },
 };
 
 const RISK_ORDER: RiskLevel[] = ['severe', 'high', 'moderate', 'low', 'none'];
 
 export function ResultScreen({ navigation, route }: Props) {
   const { originId, originName, destId, destName, month, profile } = route.params;
-  const [card,       setCard]       = useState<RecommendationCard | null>(null);
-  const [error,      setError]      = useState<string | null>(null);
-  const [activeTab,  setActiveTab]  = useState<ActiveTab>('overview');
+  const [card, setCard] = useState<RecommendationCard | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('Overview');
+  const [originCity, setOriginCity] = useState<any>(null);
+  const [destCity, setDestCity] = useState<any>(null);
   const savedRef = useRef(false);
 
   useEffect(() => {
     (async () => {
       try {
         const { origin, destination } = await fetchCities(originId, destId, month);
+        setOriginCity(origin);
+        setDestCity(destination);
         const result = generateRecommendation(origin, destination, profile);
         setCard(result);
-
-        // Save to history exactly once
         if (!savedRef.current) {
           savedRef.current = true;
           await addTripRecord({
-            id:           `${originId}-${destId}-${month}-${Date.now()}`,
-            originId,
-            originName,
-            destId,
-            destName,
-            month,
-            overall_risk: result.overall_risk,
-            timestamp:    Date.now(),
+            id: `${originId}-${destId}-${month}-${Date.now()}`,
+            originId, originName, destId, destName, month,
+            overall_risk: result.overall_risk, timestamp: Date.now(),
           });
         }
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Could not load city data.';
-        setError(msg);
+        setError(err instanceof Error ? err.message : 'Could not load city data.');
       }
     })();
   }, []);
 
   if (error) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" />
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorIcon}>⚠️</Text>
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.center}>
+          <Text style={{ fontSize: 32, marginBottom: 16 }}>⚠️</Text>
           <Text style={styles.errorTitle}>Could not load data</Text>
           <Text style={styles.errorMsg}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => navigation.goBack()}>
             <Text style={styles.retryText}>Go back</Text>
           </TouchableOpacity>
         </View>
@@ -118,587 +104,306 @@ export function ResultScreen({ navigation, route }: Props) {
 
   if (!card) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" />
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={Colors.mid} />
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={Colors.primary}/>
           <Text style={styles.loadingText}>Analysing your trip…</Text>
-          <Text style={styles.loadingSubtext}>Running on-device. No data sent.</Text>
+          <Text style={styles.loadingSub}>Running on-device. No data sent.</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const riskScores = card.risk_scores;
-  const domainKeys = Object.keys(RISK_DOMAIN_LABELS) as (keyof typeof riskScores)[];
+  const hero = RISK_HERO[card.overall_risk] ?? RISK_HERO.low;
+  const domainKeys = Object.keys(DOMAIN_LABELS);
+  const riskScores = card.risk_scores as unknown as Record<string, RiskLevel>;
 
-  // Top 3 high/severe/moderate domains for overview
-  const topConcerns = domainKeys
-    .filter(k => {
-      const lvl = riskScores[k] as RiskLevel;
-      return lvl === 'severe' || lvl === 'high' || lvl === 'moderate';
-    })
-    .sort((a, b) =>
-      RISK_ORDER.indexOf(riskScores[a] as RiskLevel) -
-      RISK_ORDER.indexOf(riskScores[b] as RiskLevel)
-    )
-    .slice(0, 3);
-
-  // Group timeline by phase
+  // Group timeline
   const phases: Record<string, TimelineItem[]> = {};
   for (const item of card.timeline) {
     if (!phases[item.phase]) phases[item.phase] = [];
     phases[item.phase].push(item);
   }
-  const phaseOrder = ['days_before', 'day_of_travel', 'first_3_days', 'ongoing'];
 
-  const sign = (n: number) => (n > 0 ? '+' : '');
+  const topItems = card.timeline.filter(t => t.is_critical).slice(0, 3).concat(
+  card.timeline.filter(t => !t.is_critical)
+).slice(0, 3);
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg}/>
 
-      {/* ── Fixed dark header ───────────────────────────────────────────── */}
-      <View style={styles.darkHeader}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backText}>← Edit profile</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8}>
+          <Text style={styles.headerBack}>← Edit</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {originName} → {destName} · {MONTHS[month - 1]}
-        </Text>
-        <View style={styles.backBtn} />
+        <Text style={styles.headerLabel}>Your plan</Text>
+        <TouchableOpacity
+          style={styles.doneBtn}
+          onPress={() => navigation.navigate('Main')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.doneBtnText}>Done</Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-
-        {/* ── Hero risk card ──────────────────────────────────────────────── */}
-        <View style={styles.heroCard}>
-          <Text style={styles.heroLabel}>Overall Risk</Text>
-          <Text style={[styles.heroRiskText, { color: Colors.risk[card.overall_risk].dot }]}>
-            {card.overall_risk.toUpperCase()}
-          </Text>
-
-          {/* 4 stat boxes */}
-          <View style={styles.statsGrid}>
-            <StatBox
-              label="Altitude change"
-              value={`${sign(card.delta.altitude_diff_m)}${card.delta.altitude_diff_m}m`}
-            />
-            <StatBox
-              label="Temp shift"
-              value={`${sign(card.delta.temp_avg_diff_c)}${card.delta.temp_avg_diff_c.toFixed(1)}°C`}
-            />
-            <StatBox
-              label="Humidity"
-              value={`${sign(card.delta.humidity_diff_pct)}${card.delta.humidity_diff_pct.toFixed(0)}%`}
-            />
-            <StatBox
-              label="AQI shift"
-              value={card.delta.aqi_diff != null
-                ? `${sign(card.delta.aqi_diff)}${card.delta.aqi_diff.toFixed(0)}`
-                : '—'}
-            />
-          </View>
-        </View>
-
-        {/* ── Tab bar ─────────────────────────────────────────────────────── */}
-        <View style={styles.tabBar}>
-          {(['overview', 'timeline', 'risks'] as ActiveTab[]).map(tab => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tab, activeTab === tab && styles.tabActive]}
-              onPress={() => setActiveTab(tab)}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Trip hero */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 18 }}>
+          <Text style={styles.eyebrow}>{MONTHS[month - 1]} trip</Text>
+          <Text style={styles.tripTitle}>{originName} → {destName}</Text>
+          {/* Risk hero card */}
+          <View style={[styles.riskHero, { backgroundColor: hero.bg }]}>
+            <View style={[styles.riskDot, { backgroundColor: hero.color }]}>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
+                {(card.overall_risk[0] ?? '?').toUpperCase()}
               </Text>
-            </TouchableOpacity>
-          ))}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.riskLabel, { color: hero.color }]}>Overall risk</Text>
+              <Text style={[styles.riskLevel, { color: hero.color }]}>
+                {card.overall_risk.charAt(0).toUpperCase() + card.overall_risk.slice(1)}
+              </Text>
+            </View>
+            <Text style={[styles.riskMsg, { color: hero.color }]}>{hero.msg}</Text>
+          </View>
         </View>
 
-        {/* ── Tab: Overview ───────────────────────────────────────────────── */}
-        {activeTab === 'overview' && (
-          <View>
-            {topConcerns.length > 0 && (
-              <>
-                <SectionLabel title="Top Concerns" />
-                {topConcerns.map(key => (
-                  <View key={String(key)} style={styles.concernCard}>
-                    <Text style={styles.concernIcon}>{RISK_DOMAIN_ICONS[String(key)] ?? '•'}</Text>
-                    <View style={styles.concernBody}>
-                      <Text style={styles.concernName}>{RISK_DOMAIN_LABELS[String(key)]}</Text>
-                      <Text style={styles.concernContext}>
-                        {riskScores[key] === 'severe' || riskScores[key] === 'high'
-                          ? 'Needs attention before travel.'
-                          : 'Keep an eye on this.'}
-                      </Text>
-                    </View>
-                    <RiskBadge level={riskScores[key] as RiskLevel} size="sm" />
-                  </View>
-                ))}
-              </>
-            )}
-
-            <SectionLabel title="Environmental Delta" />
-            <View style={styles.deltaTable}>
-              <DeltaRow
-                label="Temp shift"
-                origin="Origin"
-                dest="Destination"
-                change={`${sign(card.delta.temp_avg_diff_c)}${card.delta.temp_avg_diff_c.toFixed(1)}°C`}
-              />
-              <DeltaRow
-                label="Humidity"
-                origin="Origin"
-                dest="Destination"
-                change={`${sign(card.delta.humidity_diff_pct)}${card.delta.humidity_diff_pct.toFixed(0)}%`}
-              />
-              <DeltaRow
-                label="Altitude"
-                origin="—"
-                dest="—"
-                change={`${sign(card.delta.altitude_diff_m)}${card.delta.altitude_diff_m}m`}
-              />
-              <DeltaRow
-                label="Pressure"
-                origin="—"
-                dest="—"
-                change={`${sign(card.delta.pressure_diff_hpa)}${card.delta.pressure_diff_hpa.toFixed(0)} hPa`}
-              />
-              <DeltaRow
-                label="UV Index (dest)"
-                origin="—"
-                dest={card.delta.uv_index_dest != null ? `${card.delta.uv_index_dest.toFixed(1)}` : '—'}
-                change="—"
-                isLast
-              />
-            </View>
+        {/* Tabs */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
+          <View style={styles.tabs}>
+            {(['Overview', 'Timeline', 'Risks'] as Tab[]).map(t => (
+              <TouchableOpacity
+                key={t}
+                style={[styles.tabBtn, tab === t && styles.tabBtnOn]}
+                onPress={() => setTab(t)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.tabText, tab === t && styles.tabTextOn]}>{t}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        )}
+        </View>
 
-        {/* ── Tab: Timeline ───────────────────────────────────────────────── */}
-        {activeTab === 'timeline' && (
-          <View>
-            {phaseOrder.map(phase => {
-              const items = phases[phase];
-              if (!items?.length) return null;
-              return (
-                <View key={phase} style={styles.phaseGroup}>
-                  <View style={styles.phaseHeader}>
-                    <View style={[styles.phaseDot, { backgroundColor: PHASE_COLORS[phase] }]} />
-                    <Text style={[styles.phaseTitle, { color: PHASE_COLORS[phase] }]}>
-                      {PHASE_LABELS[phase]}
-                    </Text>
+        <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}>
+          {tab === 'Overview' && (
+            <View style={{ gap: 16 }}>
+              {/* Route arc */}
+              <View style={styles.card}>
+                <RouteArc
+                  origin={{ name: originName, alt: originCity?.altitude_m ?? 0 }}
+                  dest={{ name: destName, alt: destCity?.altitude_m ?? 0 }}
+                  height={100}
+                />
+                {originCity && destCity && (
+                  <ElevationChart
+                    originAlt={originCity.altitude_m}
+                    destAlt={destCity.altitude_m}
+                    height={64}
+                  />
+                )}
+              </View>
+
+              {/* What changes stickers */}
+              {originCity && destCity && (
+                <View>
+                  <Text style={styles.subLabel}>WHAT CHANGES</Text>
+                  <View style={styles.stickersGrid}>
+                    <WeatherSticker icon="thermo" value={destCity.climate?.temp_avg_c ?? '—'} unit="°C" label={`was ${originCity.climate?.temp_avg_c ?? '—'}°`}/>
+                    <WeatherSticker icon="droplet" value={destCity.climate?.humidity_avg_pct ?? '—'} unit="%" label={`was ${originCity.climate?.humidity_avg_pct ?? '—'}%`}/>
+                    <WeatherSticker icon="mountain" value={destCity.altitude_m} unit="m" label={`was ${originCity.altitude_m}m`}/>
+                    <WeatherSticker icon="wind" value={destCity.climate?.aqi_avg ?? '—'} unit="aqi" label={`was ${originCity.climate?.aqi_avg ?? '—'}`}/>
+                    <WeatherSticker icon="sun" value={destCity.climate?.uv_index_avg ?? '—'} unit="uv" label={`was ${originCity.climate?.uv_index_avg ?? '—'}`}/>
+                    <WeatherSticker icon="leaf" value={destCity.climate?.pollen_overall_level ?? '—'} unit="" label={`was ${originCity.climate?.pollen_overall_level ?? '—'}`}/>
                   </View>
-                  {items.map((item, i) => (
-                    <TimelineCard key={i} item={item} />
+                </View>
+              )}
+
+              {/* Top actions */}
+              {topItems.length > 0 && (
+                <View style={styles.card}>
+                  <Text style={styles.subLabel}>TOP ACTIONS</Text>
+                  {topItems.map((item, i) => (
+                    <View key={i} style={[styles.actionRow, i < topItems.length - 1 && { borderBottomWidth: 1, borderBottomColor: Colors.line }]}>
+                      <View style={styles.actionIcon}>
+                        <Text style={{ fontSize: 14 }}>{PHASE_ICON[item.phase] ?? '·'}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.actionTitle}>{item.category}</Text>
+                        <Text style={styles.actionBody}>{item.advice}</Text>
+                      </View>
+                    </View>
                   ))}
                 </View>
-              );
-            })}
-          </View>
-        )}
+              )}
+            </View>
+          )}
 
-        {/* ── Tab: Risks ──────────────────────────────────────────────────── */}
-        {activeTab === 'risks' && (
-          <View>
-            <SectionLabel title="Risk Domains" />
-            <View style={styles.riskGrid}>
-              {domainKeys.map(key => {
-                const level = riskScores[key] as RiskLevel;
-                if (!level) return null;
+          {tab === 'Timeline' && (
+            <View style={{ gap: 14 }}>
+              {['days_before', 'day_of_travel', 'first_3_days', 'ongoing'].map(phase => {
+                const items = phases[phase];
+                if (!items?.length) return null;
                 return (
-                  <View key={String(key)} style={styles.riskCell}>
-                    <Text style={styles.riskCellIcon}>{RISK_DOMAIN_ICONS[String(key)] ?? '•'}</Text>
-                    <Text style={styles.riskCellLabel}>{RISK_DOMAIN_LABELS[String(key)]}</Text>
-                    <RiskBadge level={level} size="sm" />
+                  <View key={phase}>
+                    <Text style={[styles.subLabel, { color: Colors.mid }]}>{PHASE_LABELS[phase]?.toUpperCase()}</Text>
+                    <View style={{ gap: 8 }}>
+                      {items.map((item, i) => (
+                        <View key={i} style={styles.timelineCard}>
+                          <View style={styles.timelineIcon}>
+                            <Text style={{ fontSize: 16 }}>{PHASE_ICON[item.phase] ?? '·'}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            {item.days_before != null && (
+                              <Text style={styles.daysBefore}>{item.days_before} DAYS BEFORE</Text>
+                            )}
+                            <Text style={[styles.timelineTitle, item.is_critical && { color: Colors.coral }]}>{item.category}</Text>
+                            <Text style={styles.timelineBody}>{item.advice}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })}
+              {card.timeline.length === 0 && (
+                <Text style={{ textAlign: 'center', color: Colors.inkFaint, fontSize: 13, padding: 40 }}>
+                  No preparation needed. Have a great trip.
+                </Text>
+              )}
+            </View>
+          )}
+
+          {tab === 'Risks' && (
+            <View style={{ gap: 8 }}>
+              {domainKeys.map(key => {
+                const level = riskScores[key] ?? 'none';
+                const riskColors = Colors.risk[level as keyof typeof Colors.risk];
+                return (
+                  <View key={key} style={[styles.riskRow, { borderColor: Colors.line }]}>
+                    <View style={styles.domainIcon}>
+                      <Text style={{ fontSize: 16 }}>{DOMAIN_ICONS[key] ?? '·'}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.domainLabel}>{DOMAIN_LABELS[key]}</Text>
+                      <Text style={styles.domainDesc}>{DOMAIN_DESC[key]}</Text>
+                    </View>
+                    <RiskBadge level={level} size="sm"/>
                   </View>
                 );
               })}
             </View>
-
-            {card.data_notices.length > 0 && (
-              <>
-                <SectionLabel title="Data Notes" />
-                {card.data_notices.map((n, i) => (
-                  <View key={i} style={styles.noticeCard}>
-                    <Text style={styles.noticeField}>{n.field.replace('_', ' ').toUpperCase()}</Text>
-                    <Text style={styles.noticeMsg}>{n.message}</Text>
-                  </View>
-                ))}
-              </>
-            )}
-
-            <View style={styles.disclaimer}>
-              <Text style={styles.disclaimerText}>{card.disclaimer}</Text>
-            </View>
-          </View>
-        )}
-
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StatBox({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.statBox}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function SectionLabel({ title }: { title: string }) {
-  return <Text style={styles.sectionLabel}>{title}</Text>;
-}
-
-function DeltaRow({
-  label, origin, dest, change, isLast,
-}: {
-  label:   string;
-  origin:  string;
-  dest:    string;
-  change:  string;
-  isLast?: boolean;
-}) {
-  return (
-    <View style={[styles.deltaRow, isLast && { borderBottomWidth: 0 }]}>
-      <Text style={styles.deltaLabel}>{label}</Text>
-      <Text style={styles.deltaCell}>{origin}</Text>
-      <Text style={styles.deltaCell}>{dest}</Text>
-      <Text style={[styles.deltaCell, styles.deltaCellChange]}>{change}</Text>
-    </View>
-  );
-}
-
-function TimelineCard({ item }: { item: TimelineItem }) {
-  return (
-    <View style={[styles.timelineCard, item.is_critical && styles.timelineCardCritical]}>
-      <View style={styles.timelineCardTop}>
-        <Text style={styles.timelineCategory}>{item.category}</Text>
-        {item.is_critical && (
-          <View style={styles.criticalBadge}>
-            <Text style={styles.criticalText}>Critical</Text>
-          </View>
-        )}
-        {item.phase === 'days_before' && item.days_before != null && (
-          <Text style={styles.daysBeforeText}>{item.days_before}d before</Text>
-        )}
-      </View>
-      <Text style={styles.timelineAdvice}>{item.advice}</Text>
-    </View>
-  );
-}
+const PHASE_ICON: Record<string, string> = {
+  days_before: '📋', day_of_travel: '✈', first_3_days: '⛰', ongoing: '🕐',
+};
 
 const styles = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: Colors.bg },
-  scroll: { paddingBottom: Spacing.xxl },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
 
-  centerContainer: {
-    flex:           1,
-    alignItems:     'center',
-    justifyContent: 'center',
-    gap:            Spacing.md,
-    paddingHorizontal: Spacing.xl,
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 0,
   },
-  errorIcon:    { fontSize: 40 },
-  errorTitle:   { fontSize: Font.size.xl, fontWeight: Font.weight.bold, color: Colors.text },
-  errorMsg:     { fontSize: Font.size.sm, color: Colors.textMuted, textAlign: 'center', lineHeight: 20 },
-  retryBtn:     { backgroundColor: Colors.mid, borderRadius: Radius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md },
-  retryText:    { color: Colors.textOnDark, fontWeight: Font.weight.semibold },
-  loadingText:  { fontSize: Font.size.lg, fontWeight: Font.weight.semibold, color: Colors.text, marginTop: Spacing.sm },
-  loadingSubtext: { fontSize: Font.size.sm, color: Colors.textMuted },
+  headerBack:  { fontSize: 14, color: Colors.inkFaint, letterSpacing: 0.5 },
+  headerLabel: { fontSize: 12, color: Colors.inkFaint, letterSpacing: 0.5 },
+  doneBtn: {
+    backgroundColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 999,
+  },
+  doneBtnText: { fontSize: 12, fontWeight: '600', color: '#F6F3EC' },
 
-  // Dark fixed header
-  darkHeader: {
-    backgroundColor:   Colors.primary,
-    flexDirection:     'row',
-    alignItems:        'center',
-    justifyContent:    'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical:   Spacing.md,
-  },
-  backBtn: {
-    minWidth: 80,
-  },
-  backText: {
-    fontSize:   Font.size.sm,
-    color:      Colors.bright,
-    fontWeight: Font.weight.medium,
-  },
-  headerTitle: {
-    fontSize:   Font.size.sm,
-    fontWeight: Font.weight.semibold,
-    color:      Colors.textOnDark,
-    flex:       1,
-    textAlign:  'center',
-  },
+  scroll: { paddingBottom: 32 },
+  eyebrow: { fontSize: 11, color: Colors.inkFaint, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '600' },
+  tripTitle: { fontSize: 28, lineHeight: 32, fontWeight: '500', color: Colors.ink, marginTop: 6, marginBottom: 14 },
 
-  // Hero card (dark bg)
-  heroCard: {
-    backgroundColor: Colors.hero,
-    margin:          Spacing.lg,
-    marginBottom:    0,
-    borderRadius:    Radius.xl,
-    padding:         Spacing.lg,
-    shadowColor:     Colors.primary,
-    shadowOpacity:   0.4,
-    shadowRadius:    12,
-    shadowOffset:    { width: 0, height: 4 },
-    elevation:       6,
+  riskHero: {
+    borderRadius: 14, padding: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 14,
   },
-  heroLabel: {
-    fontSize:    Font.size.xs,
-    color:       Colors.bright,
-    fontWeight:  Font.weight.medium,
-    letterSpacing: 0.8,
-    marginBottom: 6,
+  riskDot: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
   },
-  heroRiskText: {
-    fontSize:    Font.size.xxxl,
-    fontWeight:  Font.weight.bold,
-    marginBottom: Spacing.lg,
-    letterSpacing: 1,
+  riskLabel: { fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '600' },
+  riskLevel: { fontSize: 18, fontWeight: '500', marginTop: 2 },
+  riskMsg:   { fontSize: 11, opacity: 0.8, textAlign: 'right', lineHeight: 16 },
+
+  tabs: {
+    flexDirection: 'row', gap: 4, padding: 4,
+    backgroundColor: Colors.surface2, borderRadius: 12,
   },
-  statsGrid: {
-    flexDirection:  'row',
-    justifyContent: 'space-between',
-    borderTopWidth:  1,
-    borderTopColor:  'rgba(255,255,255,0.1)',
-    paddingTop:     Spacing.md,
+  tabBtn: {
+    flex: 1, height: 36, borderRadius: 9,
+    alignItems: 'center', justifyContent: 'center',
   },
-  statBox:  { alignItems: 'center', flex: 1 },
-  statValue: {
-    fontSize:   Font.size.md,
-    fontWeight: Font.weight.bold,
-    color:      Colors.textOnDark,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize:  Font.size.xs,
-    color:     'rgba(255,255,255,0.5)',
-    textAlign: 'center',
+  tabBtnOn: { backgroundColor: Colors.surface, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
+  tabText:   { fontSize: 13, fontWeight: '500', color: Colors.inkSoft },
+  tabTextOn: { color: Colors.ink },
+
+  subLabel: {
+    fontSize: 11, color: Colors.inkFaint, letterSpacing: 1,
+    textTransform: 'uppercase', fontWeight: '600', marginBottom: 10,
   },
 
-  // Tab bar
-  tabBar: {
-    flexDirection:     'row',
-    backgroundColor:   Colors.card,
-    marginHorizontal:  Spacing.lg,
-    marginTop:         Spacing.lg,
-    marginBottom:      Spacing.md,
-    borderRadius:      Radius.lg,
-    padding:           4,
-    shadowColor:       '#000',
-    shadowOpacity:     0.05,
-    shadowRadius:      6,
-    shadowOffset:      { width: 0, height: 2 },
-    elevation:         2,
-  },
-  tab: {
-    flex:            1,
-    paddingVertical: 10,
-    alignItems:      'center',
-    borderRadius:    Radius.md,
-  },
-  tabActive: {
-    backgroundColor: Colors.mid,
-    shadowColor:     Colors.mid,
-    shadowOpacity:   0.3,
-    shadowRadius:    6,
-    shadowOffset:    { width: 0, height: 2 },
-    elevation:       3,
-  },
-  tabText: {
-    fontSize:   Font.size.sm,
-    fontWeight: Font.weight.semibold,
-    color:      Colors.textMuted,
-  },
-  tabTextActive: {
-    color: Colors.textOnDark,
+  card: {
+    backgroundColor: Colors.surface, borderRadius: 16,
+    borderWidth: 1, borderColor: Colors.line,
+    padding: 14, paddingBottom: 16,
   },
 
-  sectionLabel: {
-    fontSize:          Font.size.xs,
-    fontWeight:        Font.weight.bold,
-    color:             Colors.textMuted,
-    letterSpacing:     0.8,
-    marginBottom:      Spacing.sm,
-    marginTop:         Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-  },
+  stickersGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 
-  // Concern cards (overview)
-  concernCard: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    backgroundColor: Colors.card,
-    marginHorizontal: Spacing.lg,
-    marginBottom:    Spacing.sm,
-    borderRadius:    Radius.lg,
-    padding:         Spacing.md,
-    shadowColor:     '#000',
-    shadowOpacity:   0.04,
-    shadowRadius:    6,
-    shadowOffset:    { width: 0, height: 2 },
-    elevation:       2,
+  actionRow: {
+    flexDirection: 'row', gap: 12, paddingVertical: 10,
   },
-  concernIcon: { fontSize: 24, marginRight: Spacing.md },
-  concernBody: { flex: 1 },
-  concernName: {
-    fontSize:    Font.size.md,
-    fontWeight:  Font.weight.semibold,
-    color:       Colors.text,
-    marginBottom: 2,
+  actionIcon: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: Colors.tealSoft, alignItems: 'center', justifyContent: 'center',
   },
-  concernContext: { fontSize: Font.size.xs, color: Colors.textMuted },
-
-  // Delta table (overview)
-  deltaTable: {
-    backgroundColor:   Colors.card,
-    marginHorizontal:  Spacing.lg,
-    borderRadius:      Radius.lg,
-    marginBottom:      Spacing.md,
-    overflow:          'hidden',
-    shadowColor:       '#000',
-    shadowOpacity:     0.04,
-    shadowRadius:      6,
-    shadowOffset:      { width: 0, height: 2 },
-    elevation:         2,
-  },
-  deltaRow: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical:   12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.separator,
-  },
-  deltaLabel: {
-    flex:       1.2,
-    fontSize:   Font.size.xs,
-    color:      Colors.textMuted,
-    fontWeight: Font.weight.medium,
-  },
-  deltaCell: {
-    flex:       1,
-    fontSize:   Font.size.sm,
-    color:      Colors.text,
-    textAlign:  'right',
-    fontWeight: Font.weight.medium,
-  },
-  deltaCellChange: {
-    color:      Colors.mid,
-    fontWeight: Font.weight.bold,
-  },
-
-  // Phase groups (timeline)
-  phaseGroup:  { marginHorizontal: Spacing.lg, marginBottom: Spacing.md },
-  phaseHeader: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    marginBottom:  Spacing.sm,
-    gap:           Spacing.sm,
-  },
-  phaseDot:   { width: 8, height: 8, borderRadius: 4 },
-  phaseTitle: { fontSize: Font.size.sm, fontWeight: Font.weight.bold },
+  actionTitle: { fontSize: 13, fontWeight: '600', color: Colors.ink },
+  actionBody:  { fontSize: 12, color: Colors.inkSoft, marginTop: 2, lineHeight: 17 },
 
   timelineCard: {
-    backgroundColor:  Colors.card,
-    borderRadius:     Radius.md,
-    padding:          Spacing.md,
-    marginBottom:     Spacing.sm,
-    borderLeftWidth:  3,
-    borderLeftColor:  Colors.border,
-    shadowColor:      '#000',
-    shadowOpacity:    0.04,
-    shadowRadius:     6,
-    shadowOffset:     { width: 0, height: 2 },
-    elevation:        1,
+    flexDirection: 'row', gap: 12,
+    backgroundColor: Colors.surface, borderRadius: 14,
+    borderWidth: 1, borderColor: Colors.line, padding: 12,
   },
-  timelineCardCritical: { borderLeftColor: '#EF4444' },
-  timelineCardTop: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    marginBottom:  6,
-    gap:           Spacing.sm,
+  timelineIcon: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: Colors.tealSoft, alignItems: 'center', justifyContent: 'center',
   },
-  timelineCategory: {
-    fontSize:   Font.size.sm,
-    fontWeight: Font.weight.bold,
-    color:      Colors.text,
-    flex:       1,
-  },
-  criticalBadge: {
-    backgroundColor:  '#FEF2F2',
-    borderRadius:     Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical:   2,
-  },
-  criticalText: { fontSize: Font.size.xs, fontWeight: Font.weight.bold, color: '#991B1B' },
-  daysBeforeText: { fontSize: Font.size.xs, color: '#3B82F6', fontWeight: Font.weight.semibold },
-  timelineAdvice: { fontSize: Font.size.sm, color: Colors.textMuted, lineHeight: 20 },
+  daysBefore:    { fontSize: 10, color: Colors.inkFaint, fontWeight: '600', letterSpacing: 0.5 },
+  timelineTitle: { fontSize: 14, fontWeight: '600', color: Colors.ink, marginTop: 2 },
+  timelineBody:  { fontSize: 12, color: Colors.inkSoft, marginTop: 3, lineHeight: 17 },
 
-  // Risk grid (risks tab)
-  riskGrid: {
-    flexDirection:     'row',
-    flexWrap:          'wrap',
-    gap:               Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    marginBottom:      Spacing.md,
+  riskRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: Colors.surface, borderRadius: 14,
+    borderWidth: 1, padding: 12,
   },
-  riskCell: {
-    backgroundColor: Colors.card,
-    borderRadius:    Radius.md,
-    padding:         Spacing.md,
-    width:           '47%',
-    shadowColor:     '#000',
-    shadowOpacity:   0.04,
-    shadowRadius:    6,
-    shadowOffset:    { width: 0, height: 2 },
-    elevation:       1,
+  domainIcon: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: Colors.tealSoft, alignItems: 'center', justifyContent: 'center',
   },
-  riskCellIcon:  { fontSize: 22, marginBottom: 6 },
-  riskCellLabel: {
-    fontSize:    Font.size.xs,
-    color:       Colors.textMuted,
-    marginBottom: 6,
-    fontWeight:  Font.weight.medium,
-  },
+  domainLabel: { fontSize: 13, fontWeight: '600', color: Colors.ink },
+  domainDesc:  { fontSize: 11, color: Colors.inkFaint, marginTop: 2 },
 
-  // Notices
-  noticeCard: {
-    backgroundColor:  '#FFFBEB',
-    borderRadius:     Radius.md,
-    padding:          Spacing.md,
-    marginHorizontal: Spacing.lg,
-    marginBottom:     Spacing.sm,
-    borderLeftWidth:  3,
-    borderLeftColor:  '#F59E0B',
+  errorTitle:   { fontSize: 20, fontWeight: '600', color: Colors.ink, marginBottom: 8 },
+  errorMsg:     { fontSize: 13, color: Colors.inkSoft, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  retryBtn: {
+    backgroundColor: Colors.primary, borderRadius: Radius.lg,
+    paddingHorizontal: 24, paddingVertical: 12,
   },
-  noticeField: { fontSize: Font.size.xs, fontWeight: Font.weight.bold, color: '#92400E', marginBottom: 4 },
-  noticeMsg:   { fontSize: Font.size.sm, color: '#78350F', lineHeight: 18 },
-
-  // Disclaimer
-  disclaimer: {
-    marginHorizontal: Spacing.lg,
-    marginTop:        Spacing.md,
-    padding:          Spacing.md,
-    backgroundColor:  Colors.card,
-    borderRadius:     Radius.md,
-  },
-  disclaimerText: {
-    fontSize:  Font.size.xs,
-    color:     Colors.textMuted,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
+  retryText:    { color: '#F6F3EC', fontWeight: '600', fontSize: 14 },
+  loadingText:  { fontSize: 16, fontWeight: '500', color: Colors.ink, marginTop: 16 },
+  loadingSub:   { fontSize: 12, color: Colors.inkFaint, marginTop: 4 },
 });

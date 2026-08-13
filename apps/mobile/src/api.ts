@@ -8,7 +8,7 @@
  * City data is public — no auth, no user data transmitted.
  */
 
-import type { City, CityClimate, RiskLevel } from '@acclimate/engine';
+import type { City, RiskLevel } from '@acclimate/engine';
 import { saveCityCache, loadCityCache } from './storage';
 
 // LAN IP of the machine running the API server (auto-detected: 192.168.1.90)
@@ -74,7 +74,7 @@ interface ApiCityResponse {
 function mapToEngineCity(raw: ApiCityResponse): City {
   const m = raw.month_data;
 
-  const climate: CityClimate = {
+  const climate: City['climate'] = {
     month:               m.month,
     temp_avg_c:          m.temp_avg_c,
     temp_min_c:          m.temp_min_c,
@@ -86,14 +86,14 @@ function mapToEngineCity(raw: ApiCityResponse): City {
     aqi_avg:             m.aqi_avg,
     pm25_avg:            m.pm25_avg,
     uv_index_avg:        m.uv_index_avg,
-    pollen_overall_level: m.pollen_overall_level as CityClimate['pollen_overall_level'],
+    pollen_overall_level: m.pollen_overall_level as City['climate']['pollen_overall_level'],
     pollen_tree:         m.pollen_tree,
     pollen_grass:        m.pollen_grass,
     pollen_weed:         m.pollen_weed,
     wind_speed_avg_kmh:  m.wind_speed_avg_kmh,
     rainfall_avg_mm:     m.rainfall_avg_mm,
     is_monsoon_month:    m.is_monsoon_month,
-    season:              m.season as CityClimate['season'],
+    season:              m.season as City['climate']['season'],
     pressure_hpa:        m.pressure_hpa,
   };
 

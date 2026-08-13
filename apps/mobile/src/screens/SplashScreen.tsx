@@ -1,114 +1,95 @@
 import React, { useEffect, useRef } from 'react';
-import {
-  View, Text, StyleSheet, Animated, SafeAreaView,
-} from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors, Font } from '../theme';
+import { Colors } from '../theme';
+import { AcclimateLogo } from '../components/AcclimateLogo';
 import type { RootStackParamList } from '../../App';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 
 export function SplashScreen({ navigation }: Props) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const dot1 = useRef(new Animated.Value(0.2)).current;
+  const dot2 = useRef(new Animated.Value(0.2)).current;
+  const dot3 = useRef(new Animated.Value(0.2)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 700,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 6,
-        tension: 60,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 700, useNativeDriver: true }).start();
+
+    const pulse = (anim: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0.2, duration: 400, useNativeDriver: true }),
+        ])
+      );
+    pulse(dot1, 0).start();
+    pulse(dot2, 180).start();
+    pulse(dot3, 360).start();
 
     const timer = setTimeout(async () => {
       try {
         const done = await AsyncStorage.getItem('onboarding_done');
-        if (done === 'true') {
-          navigation.replace('Main');
-        } else {
-          navigation.replace('Onboarding');
-        }
+        navigation.replace(done === 'true' ? 'Main' : 'Onboarding');
       } catch {
         navigation.replace('Onboarding');
       }
-    }, 2000);
+    }, 2200);
 
     return () => clearTimeout(timer);
   }, []);
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <Animated.View
-        style={[
-          styles.container,
-          { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
-        ]}
-      >
-        {/* Logo circle */}
-        <View style={styles.logoCircle}>
-          <Text style={styles.logoLetter}>A</Text>
-        </View>
-
-        {/* Title */}
+    <View style={styles.container}>
+      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        <AcclimateLogo size={120} dark={true}/>
         <Text style={styles.title}>Acclimate</Text>
-
-        {/* Tagline */}
-        <Text style={styles.tagline}>Prepare. Arrive. Thrive.</Text>
+        <Text style={styles.tagline}>Your travel-health companion.</Text>
       </Animated.View>
-    </SafeAreaView>
+      <View style={styles.dots}>
+        {[dot1, dot2, dot3].map((a, i) => (
+          <Animated.View key={i} style={[styles.dot, { opacity: a }]}/>
+        ))}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex:            1,
-    backgroundColor: Colors.primary,
-  },
   container: {
-    flex:           1,
-    alignItems:     'center',
+    flex: 1,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
   },
-  logoCircle: {
-    width:           100,
-    height:          100,
-    borderRadius:    50,
-    backgroundColor: Colors.mid,
-    alignItems:      'center',
-    justifyContent:  'center',
-    marginBottom:    24,
-    shadowColor:     Colors.bright,
-    shadowOpacity:   0.5,
-    shadowRadius:    20,
-    shadowOffset:    { width: 0, height: 8 },
-    elevation:       12,
-  },
-  logoLetter: {
-    fontSize:   Font.size.xxxl,
-    fontWeight: Font.weight.bold,
-    color:      Colors.textOnDark,
-    lineHeight: Font.size.xxxl + 4,
+  content: {
+    alignItems: 'center',
+    gap: 12,
   },
   title: {
-    fontSize:      Font.size.xxl + 4,
-    fontWeight:    Font.weight.bold,
-    color:         Colors.textOnDark,
-    letterSpacing: 1,
-    marginBottom:  12,
+    fontSize: 34,
+    fontWeight: '500',
+    color: '#F6F3EC',
+    letterSpacing: -0.5,
+    marginTop: 8,
   },
   tagline: {
-    fontSize:      Font.size.md,
-    color:         Colors.bright,
-    letterSpacing: 0.5,
-    fontWeight:    Font.weight.medium,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 0.3,
+  },
+  dots: {
+    position: 'absolute',
+    bottom: 80,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.bright,
   },
 });

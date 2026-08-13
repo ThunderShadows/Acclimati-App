@@ -3,42 +3,53 @@ export const Colors = {
   primary:    '#0B2D32',   // deep dark teal
   mid:        '#0D7C82',   // mid teal
   bright:     '#16A896',   // bright teal
+  tealSoft:   '#D6EBE8',   // soft teal tint
 
-  // Backgrounds
-  bg:         '#F2F5F8',   // cool light gray
+  // Backgrounds (warm off-white light mode)
+  bg:         '#F6F3EC',   // warm off-white
+  surface:    '#FFFFFF',   // pure white card surface
+  surface2:   '#EFEBE2',   // secondary surface
+
+  // Legacy aliases
   card:       '#FFFFFF',
   hero:       '#0B2D32',   // dark hero card bg
 
   // Text
-  text:       '#1A2332',
-  textMuted:  '#6B7280',
-  textLight:  '#94A3B8',
-  textOnDark: '#FFFFFF',
+  ink:        '#0B1F22',   // near-black
+  inkSoft:    '#4C5C5E',   // medium grey-teal
+  inkFaint:   '#8A9699',   // light grey
+  text:       '#0B1F22',
+  textMuted:  '#4C5C5E',
+  textLight:  '#8A9699',
+  textOnDark: '#F6F3EC',
 
-  // Borders / separators
-  border:     '#E4E8EE',
-  separator:  '#F0F3F6',
+  // Borders
+  line:       '#E4DED1',   // warm border
+  border:     '#E4DED1',
+  separator:  '#EFEBE2',
 
   // Accent colours
-  coral:      '#F06449',
-  amber:      '#F59E0B',
-  green:      '#10B981',
+  coral:      '#E26D5C',
+  amber:      '#E9A84D',
+  sand:       '#EADFCB',
 
-  // Risk level palette (with border field added)
+  // Legacy accent
+  green:      '#2E8266',
+
+  // Risk level palette (matches design)
   risk: {
-    none:     { bg: '#F0FDF4', text: '#166534', border: '#BBF7D0', dot: '#22C55E' },
-    low:      { bg: '#FFFBEB', text: '#92400E', border: '#FDE68A', dot: '#F59E0B' },
-    moderate: { bg: '#FFF7ED', text: '#9A3412', border: '#FED7AA', dot: '#F97316' },
-    high:     { bg: '#FEF2F2', text: '#991B1B', border: '#FECACA', dot: '#EF4444' },
-    severe:   { bg: '#FDF4FF', text: '#6B21A8', border: '#E9D5FF', dot: '#A855F7' },
+    none:     { bg: '#D7ECDF', text: '#2E8266', border: '#9DCFAE', dot: '#2E8266' },
+    low:      { bg: '#F2E6B7', text: '#7A6416', border: '#D9BE5E', dot: '#7A6416' },
+    moderate: { bg: '#F6D9B8', text: '#B06528', border: '#E2A76D', dot: '#B06528' },
+    high:     { bg: '#F5C9BF', text: '#B0362B', border: '#E28071', dot: '#B0362B' },
+    severe:   { bg: '#E3CEED', text: '#6B3A8F', border: '#B88CCE', dot: '#6B3A8F' },
   },
 
-  // Phase accent (kept for ResultScreen timeline)
   phase: {
-    days_before:   '#3B82F6',
-    day_of_travel: '#8B5CF6',
-    first_3_days:  '#10B981',
-    ongoing:       '#6B7280',
+    days_before:   '#0D7C82',
+    day_of_travel: '#E26D5C',
+    first_3_days:  '#2E8266',
+    ongoing:       '#8A9699',
   },
 } as const;
 
@@ -61,12 +72,12 @@ export const Radius = {
 
 export const Font = {
   size: {
-    xs:  11,
-    sm:  13,
-    md:  15,
-    lg:  17,
-    xl:  20,
-    xxl: 26,
+    xs:   11,
+    sm:   13,
+    md:   15,
+    lg:   17,
+    xl:   20,
+    xxl:  26,
     xxxl: 32,
   },
   weight: {

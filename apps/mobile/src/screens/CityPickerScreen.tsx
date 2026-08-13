@@ -1,201 +1,188 @@
-/**
- * CityPickerScreen — full screen modal with dark header + white card body.
- */
-
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  FlatList, Modal, SafeAreaView, ScrollView, StatusBar,
+  FlatList, Modal, ScrollView, StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CITIES, MONTHS, CityOption } from '../cities';
-import { Colors, Font, Radius, Spacing } from '../theme';
+import { Colors, Radius, Spacing } from '../theme';
+import { RouteArc, ElevationChart } from '../components/RouteArc';
 import type { RootStackParamList } from '../../App';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CityPicker'>;
 
-export function CityPickerScreen({ navigation }: Props) {
-  const [origin, setOrigin] = useState<CityOption | null>(null);
-  const [dest,   setDest]   = useState<CityOption | null>(null);
-  const [month,  setMonth]  = useState<number>(new Date().getMonth() + 1);
-  const [modal,  setModal]  = useState<'origin' | 'dest' | null>(null);
-  const [query,  setQuery]  = useState('');
+export function CityPickerScreen({ navigation, route }: Props) {
+  const p = route.params ?? {};
+
+  const [origin, setOrigin] = useState<CityOption | null>(
+    p.prefillOriginId ? (CITIES.find(c => c.id === p.prefillOriginId) ?? null) : null
+  );
+  const [dest, setDest] = useState<CityOption | null>(
+    p.prefillDestId ? (CITIES.find(c => c.id === p.prefillDestId) ?? null) : null
+  );
+  const [month, setMonth] = useState(p.prefillMonth ?? new Date().getMonth() + 1);
+  const [modal, setModal] = useState<'origin' | 'dest' | null>(null);
+  const [query, setQuery] = useState('');
 
   const filtered = useMemo(() =>
-    CITIES.filter(c =>
-      c.label.toLowerCase().includes(query.toLowerCase())
-    ), [query]);
+    CITIES.filter(c => c.label.toLowerCase().includes(query.toLowerCase())), [query]);
 
-  function swap() {
-    setOrigin(dest);
-    setDest(origin);
-  }
-
-  function selectCity(city: CityOption) {
-    if (modal === 'origin') setOrigin(city);
-    else                    setDest(city);
-    setModal(null);
-    setQuery('');
-  }
-
+  const swap = () => { const tmp = origin; setOrigin(dest); setDest(tmp); };
+  const selectCity = (city: CityOption) => {
+    if (modal === 'origin') setOrigin(city); else setDest(city);
+    setModal(null); setQuery('');
+  };
   const canContinue = origin && dest && origin.id !== dest.id;
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary}/>
 
-      {/* ── Dark header ───────────────────────────────────────────────── */}
+      {/* Dark header */}
       <View style={styles.darkHeader}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backText}>← Back</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8}>
+          <Text style={{ fontSize: 22, color: '#F6F3EC' }}>✕</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Select route</Text>
-        <View style={styles.backBtn} />
+        <Text style={styles.headerSub}>New trip</Text>
+        <View style={{ width: 30 }}/>
       </View>
+      <Text style={styles.headerTitle}>Where are you going?</Text>
 
-      {/* ── White body card ────────────────────────────────────────────── */}
-      <View style={styles.bodyCard}>
+      {/* White card body pulled up */}
+      <View style={styles.body}>
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Route card */}
-          <View style={styles.routeCard}>
-            {/* Origin */}
-            <TouchableOpacity
-              style={styles.cityField}
-              onPress={() => setModal('origin')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.fieldLabel}>FROM</Text>
-              <Text style={[styles.fieldValue, !origin && styles.placeholder]}>
-                {origin?.name ?? 'Select origin city'}
-              </Text>
-              {origin && <Text style={styles.fieldState}>{origin.state}</Text>}
+          {/* Origin / Dest */}
+          <View>
+            <TouchableOpacity style={styles.cityField} onPress={() => setModal('origin')} activeOpacity={0.7}>
+              <View style={[styles.dot, { backgroundColor: Colors.primary }]}/>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>FROM</Text>
+                <Text style={[styles.fieldValue, !origin && styles.placeholder]}>
+                  {origin?.name ?? 'Your home city'}
+                </Text>
+                {origin && <Text style={styles.fieldSub}>{origin.state} · {origin.altitude_m}m</Text>}
+              </View>
+              <Text style={{ color: Colors.inkFaint, fontSize: 18 }}>›</Text>
             </TouchableOpacity>
 
-            {/* Divider + swap */}
-            <View style={styles.swapRow}>
-              <View style={styles.dividerLine} />
-              <TouchableOpacity style={styles.swapBtn} onPress={swap} activeOpacity={0.7}>
-                <Text style={styles.swapIcon}>⇅</Text>
-              </TouchableOpacity>
-              <View style={styles.dividerLine} />
-            </View>
+            <TouchableOpacity style={styles.cityField} onPress={() => setModal('dest')} activeOpacity={0.7}>
+              <View style={[styles.dot, { backgroundColor: Colors.coral }]}/>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>TO</Text>
+                <Text style={[styles.fieldValue, !dest && styles.placeholder]}>
+                  {dest?.name ?? 'Your destination'}
+                </Text>
+                {dest && <Text style={styles.fieldSub}>{dest.state} · {dest.altitude_m}m</Text>}
+              </View>
+              <Text style={{ color: Colors.inkFaint, fontSize: 18 }}>›</Text>
+            </TouchableOpacity>
 
-            {/* Destination */}
-            <TouchableOpacity
-              style={styles.cityField}
-              onPress={() => setModal('dest')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.fieldLabel}>TO</Text>
-              <Text style={[styles.fieldValue, !dest && styles.placeholder]}>
-                {dest?.name ?? 'Select destination city'}
-              </Text>
-              {dest && <Text style={styles.fieldState}>{dest.state}</Text>}
+            {/* Swap button */}
+            <TouchableOpacity style={styles.swapBtn} onPress={swap} activeOpacity={0.7}>
+              <Text style={{ fontSize: 16, color: Colors.ink }}>⇅</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Month section */}
-          <Text style={styles.sectionLabel}>WHEN ARE YOU TRAVELLING?</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.monthRow}
-          >
-            {MONTHS.map((m, i) => {
-              const n = i + 1;
-              const selected = month === n;
-              return (
-                <TouchableOpacity
-                  key={n}
-                  style={[styles.monthChip, selected && styles.monthChipSelected]}
-                  onPress={() => setMonth(n)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.monthText, selected && styles.monthTextSelected]}>
-                    {m}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          {/* Arc preview */}
+          {origin && dest && origin.id !== dest.id && (
+            <View style={styles.arcCard}>
+              <RouteArc
+                origin={{ name: origin.name, alt: origin.altitude_m }}
+                dest={{ name: dest.name, alt: dest.altitude_m }}
+                height={90}
+              />
+              <ElevationChart
+                originAlt={origin.altitude_m}
+                destAlt={dest.altitude_m}
+                height={60}
+              />
+            </View>
+          )}
 
-          {/* CTA */}
+          {/* Month grid */}
+          <View style={styles.monthSection}>
+            <Text style={styles.sectionLabel}>📅  TRAVEL MONTH</Text>
+            <View style={styles.monthGrid}>
+              {MONTHS.map((m, i) => {
+                const n = i + 1;
+                const on = month === n;
+                return (
+                  <TouchableOpacity
+                    key={n}
+                    style={[styles.monthChip, on && styles.monthChipOn]}
+                    onPress={() => setMonth(n)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.monthText, on && styles.monthTextOn]}>{m}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.ctaBtn, !canContinue && styles.ctaBtnDisabled]}
+            style={[styles.ctaBtn, !canContinue && { opacity: 0.4 }]}
             onPress={() => {
               if (!canContinue) return;
               navigation.navigate('Questionnaire', {
-                originId:   origin!.id,
-                originName: origin!.name,
-                destId:     dest!.id,
-                destName:   dest!.name,
-                month,
+                originId: origin!.id, originName: origin!.name,
+                destId: dest!.id, destName: dest!.name, month,
               });
             }}
             activeOpacity={0.85}
             disabled={!canContinue}
           >
-            <Text style={[styles.ctaText, !canContinue && styles.ctaTextDisabled]}>
-              {canContinue
-                ? `Find my plan  →`
-                : 'Select both cities to continue'}
-            </Text>
+            <Text style={styles.ctaText}>Continue →</Text>
           </TouchableOpacity>
-        </ScrollView>
+        </View>
       </View>
 
-      {/* ── City search modal ────────────────────────────────────────────── */}
+      {/* City search modal */}
       <Modal visible={modal !== null} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.modalSafe}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bg }} edges={['top']}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {modal === 'origin' ? 'Origin City' : 'Destination City'}
-            </Text>
-            <TouchableOpacity onPress={() => { setModal(null); setQuery(''); }}>
-              <Text style={styles.modalClose}>✕</Text>
+            <TouchableOpacity onPress={() => { setModal(null); setQuery(''); }} hitSlop={8}>
+              <Text style={{ fontSize: 20, color: Colors.ink }}>✕</Text>
             </TouchableOpacity>
+            <Text style={styles.modalTitle}>
+              {modal === 'origin' ? 'Pick your home' : 'Pick destination'}
+            </Text>
+            <View style={{ width: 30 }}/>
           </View>
-
           <View style={styles.searchBox}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search city or state..."
-              placeholderTextColor={Colors.textMuted}
+              placeholder="Search cities"
+              placeholderTextColor={Colors.inkFaint}
               value={query}
               onChangeText={setQuery}
               autoFocus
             />
           </View>
-
           <FlatList
             data={filtered}
             keyExtractor={c => c.id}
             keyboardShouldPersistTaps="handled"
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
             renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.cityRow}
-                onPress={() => selectCity(item)}
-                activeOpacity={0.7}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cityRowName}>{item.name}</Text>
-                  <Text style={styles.cityRowState}>{item.state}</Text>
+              <TouchableOpacity style={styles.cityRow} onPress={() => selectCity(item)} activeOpacity={0.7}>
+                <View style={styles.cityIdBox}>
+                  <Text style={styles.cityId}>{item.id}</Text>
                 </View>
-                <View style={styles.cityIdBadge}>
-                  <Text style={styles.cityRowId}>{item.id}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cityName}>{item.name}</Text>
+                  <Text style={styles.citySub}>{item.state} · {item.altitude_m}m</Text>
                 </View>
               </TouchableOpacity>
             )}
+            ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: Colors.line, marginLeft: 72 }}/>}
           />
         </SafeAreaView>
       </Modal>
@@ -204,179 +191,93 @@ export function CityPickerScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex:            1,
-    backgroundColor: Colors.primary,
-  },
+  safe: { flex: 1, backgroundColor: Colors.primary },
 
-  // Dark header
   darkHeader: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    justifyContent:    'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical:   Spacing.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16,
   },
-  backBtn: {
-    minWidth: 64,
-  },
-  backText: {
-    fontSize:   Font.size.md,
-    color:      Colors.bright,
-    fontWeight: Font.weight.medium,
-  },
+  headerSub:   { fontSize: 12, letterSpacing: 0.5, color: 'rgba(255,255,255,0.7)' },
   headerTitle: {
-    fontSize:   Font.size.lg,
-    fontWeight: Font.weight.bold,
-    color:      Colors.textOnDark,
+    fontSize: 24, fontWeight: '500', color: '#F6F3EC',
+    paddingHorizontal: 20, paddingBottom: 32,
   },
 
-  // White card body
-  bodyCard: {
-    flex:               1,
-    backgroundColor:    Colors.card,
-    borderTopLeftRadius:  24,
-    borderTopRightRadius: 24,
-  },
-  scroll: {
-    padding:       Spacing.lg,
-    paddingBottom: Spacing.xxl,
-  },
-
-  // Route card
-  routeCard: {
+  body: {
+    flex: 1, marginTop: -20,
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
     backgroundColor: Colors.bg,
-    borderRadius:    Radius.lg,
-    padding:         Spacing.md,
-    marginBottom:    Spacing.lg,
-    borderWidth:     1,
-    borderColor:     Colors.border,
   },
-  cityField:    { paddingVertical: Spacing.sm },
-  fieldLabel:   {
-    fontSize:    Font.size.xs,
-    fontWeight:  Font.weight.bold,
-    color:       Colors.mid,
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-  fieldValue:   {
-    fontSize:   Font.size.xl,
-    fontWeight: Font.weight.semibold,
-    color:      Colors.text,
-  },
-  fieldState:   { fontSize: Font.size.sm, color: Colors.textMuted, marginTop: 2 },
-  placeholder:  { color: Colors.border },
+  scroll: { padding: 20, paddingBottom: 100 },
 
-  swapRow:    { flexDirection: 'row', alignItems: 'center', marginVertical: Spacing.xs },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  cityField: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: Colors.surface, borderRadius: 16,
+    borderWidth: 1, borderColor: Colors.line,
+    padding: 14, marginBottom: 10,
+  },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  fieldLabel: { fontSize: 10, color: Colors.inkFaint, letterSpacing: 1, textTransform: 'uppercase' },
+  fieldValue: { fontSize: 18, color: Colors.ink, fontWeight: '500', marginTop: 2 },
+  fieldSub:   { fontSize: 11, color: Colors.inkFaint },
+  placeholder: { color: Colors.inkFaint },
   swapBtn: {
-    width:            36,
-    height:           36,
-    borderRadius:     18,
-    backgroundColor:  Colors.card,
-    borderWidth:      1.5,
-    borderColor:      Colors.border,
-    alignItems:       'center',
-    justifyContent:   'center',
-    marginHorizontal: Spacing.sm,
-  },
-  swapIcon: {
-    fontSize:   16,
-    color:      Colors.mid,
-    fontWeight: Font.weight.bold,
+    position: 'absolute', right: 18, top: 62,
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.line,
+    alignItems: 'center', justifyContent: 'center',
+    transform: [{ translateY: -17 }],
   },
 
-  // Month chips
-  sectionLabel: {
-    fontSize:    Font.size.xs,
-    fontWeight:  Font.weight.bold,
-    color:       Colors.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: Spacing.sm,
+  arcCard: {
+    marginTop: 22, backgroundColor: Colors.surface,
+    borderRadius: 16, borderWidth: 1, borderColor: Colors.line,
+    padding: 12, paddingBottom: 16,
   },
-  monthRow: { paddingBottom: Spacing.lg },
+
+  monthSection: { marginTop: 22 },
+  sectionLabel: { fontSize: 11, color: Colors.inkFaint, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '600', marginBottom: 10 },
+  monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   monthChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical:   Spacing.sm,
-    borderRadius:      Radius.full,
-    borderWidth:       1.5,
-    borderColor:       Colors.border,
-    backgroundColor:   Colors.bg,
-    marginRight:       Spacing.sm,
+    width: '14.5%', height: 38, borderRadius: 10,
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.line,
+    alignItems: 'center', justifyContent: 'center',
   },
-  monthChipSelected: { borderColor: Colors.mid, backgroundColor: Colors.mid },
-  monthText:         { fontSize: Font.size.sm, fontWeight: Font.weight.medium, color: Colors.textMuted },
-  monthTextSelected: { color: Colors.textOnDark },
+  monthChipOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  monthText:   { fontSize: 12, fontWeight: '500', color: Colors.inkSoft },
+  monthTextOn: { color: '#F6F3EC' },
 
-  // CTA
+  footer: { paddingHorizontal: 20, paddingBottom: 24, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.line, backgroundColor: Colors.bg },
   ctaBtn: {
-    backgroundColor: Colors.mid,
-    borderRadius:    Radius.lg,
-    height:          56,
-    alignItems:      'center',
-    justifyContent:  'center',
-    marginTop:       Spacing.md,
-    shadowColor:     Colors.mid,
-    shadowOpacity:   0.35,
-    shadowRadius:    10,
-    shadowOffset:    { width: 0, height: 4 },
-    elevation:       5,
+    height: 52, borderRadius: Radius.lg,
+    backgroundColor: Colors.primary,
+    alignItems: 'center', justifyContent: 'center',
   },
-  ctaBtnDisabled: {
-    backgroundColor: Colors.border,
-    shadowOpacity:   0,
-    elevation:       0,
-  },
-  ctaText: {
-    fontSize:   Font.size.md,
-    fontWeight: Font.weight.bold,
-    color:      Colors.textOnDark,
-  },
-  ctaTextDisabled: { color: Colors.textMuted },
+  ctaText: { fontSize: 15, fontWeight: '600', color: '#F6F3EC', letterSpacing: 0.2 },
 
-  // Modal
-  modalSafe: { flex: 1, backgroundColor: Colors.bg },
   modalHeader: {
-    flexDirection:    'row',
-    alignItems:       'center',
-    justifyContent:   'space-between',
-    padding:          Spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor:  Colors.card,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16,
   },
-  modalTitle: { fontSize: Font.size.lg, fontWeight: Font.weight.bold, color: Colors.text },
-  modalClose: { fontSize: Font.size.xl, color: Colors.textMuted, padding: Spacing.xs },
-
+  modalTitle: { fontSize: 18, fontWeight: '500', color: Colors.ink },
   searchBox: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    backgroundColor:   Colors.card,
-    margin:            Spacing.md,
-    borderRadius:      Radius.md,
-    borderWidth:       1.5,
-    borderColor:       Colors.border,
-    paddingHorizontal: Spacing.md,
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: 20, marginBottom: 8,
+    backgroundColor: Colors.surface, borderRadius: 14,
+    borderWidth: 1, borderColor: Colors.line,
+    paddingHorizontal: 14, height: 44,
   },
-  searchIcon:  { fontSize: 16, marginRight: Spacing.sm },
-  searchInput: { flex: 1, height: 48, fontSize: Font.size.md, color: Colors.text },
-
-  separator: { height: 1, backgroundColor: Colors.separator, marginLeft: Spacing.lg },
+  searchInput: { flex: 1, fontSize: 14, color: Colors.ink },
   cityRow: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical:   Spacing.md,
-    backgroundColor:   Colors.card,
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 20, paddingVertical: 14,
+    backgroundColor: Colors.surface,
   },
-  cityRowName:  { fontSize: Font.size.md, fontWeight: Font.weight.medium, color: Colors.text },
-  cityRowState: { fontSize: Font.size.sm, color: Colors.textMuted, marginTop: 2 },
-  cityIdBadge: {
-    backgroundColor: Colors.bg,
-    borderRadius:    Radius.sm,
-    paddingHorizontal: 8,
-    paddingVertical:   4,
+  cityIdBox: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: Colors.tealSoft, alignItems: 'center', justifyContent: 'center',
   },
-  cityRowId: { fontSize: Font.size.xs, color: Colors.textMuted, fontWeight: Font.weight.bold },
+  cityId:   { fontSize: 11, fontWeight: '600', color: Colors.primary, fontFamily: 'monospace' },
+  cityName: { fontSize: 16, fontWeight: '500', color: Colors.ink },
+  citySub:  { fontSize: 11, color: Colors.inkFaint },
 });

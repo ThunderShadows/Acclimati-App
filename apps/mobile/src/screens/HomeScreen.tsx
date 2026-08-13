@@ -1,12 +1,15 @@
 import React, { useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, SafeAreaView, StatusBar,
+  ScrollView, StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors, Font, Radius, Spacing } from '../theme';
+import { Colors, Radius, Spacing } from '../theme';
 import { RiskBadge } from '../components/RiskBadge';
+import { AcclimateLogo } from '../components/AcclimateLogo';
+import { RouteArc } from '../components/RouteArc';
 import { useRecentTrips } from '../hooks/useRecentTrips';
 import type { RootStackParamList } from '../../App';
 import { MONTHS } from '../cities';
@@ -14,26 +17,17 @@ import type { RiskLevel } from '@acclimate/engine';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-interface PopularRoute {
-  originId: string;
-  originName: string;
-  destId: string;
-  destName: string;
-  emoji: string;
-  tag: string;
-}
-
-const POPULAR_ROUTES: PopularRoute[] = [
-  { originId: 'DEL', originName: 'Delhi',     destId: 'IXL', destName: 'Leh',    emoji: '⛰️', tag: '3524m altitude change' },
-  { originId: 'BOM', originName: 'Mumbai',    destId: 'GOI', destName: 'Goa',    emoji: '🌊', tag: 'Coastal escape' },
-  { originId: 'DEL', originName: 'Delhi',     destId: 'SLV', destName: 'Shimla', emoji: '🌿', tag: 'Hill station' },
-  { originId: 'BLR', originName: 'Bengaluru', destId: 'OOT', destName: 'Ooty',   emoji: '🌸', tag: 'Nilgiris' },
+const POPULAR_ROUTES = [
+  { originId: 'DEL', originName: 'Delhi',     destId: 'IXL', destName: 'Leh',    note: '3,308 m up',    icon: '⛰' },
+  { originId: 'BOM', originName: 'Mumbai',    destId: 'GOI', destName: 'Goa',    note: 'Coastal escape', icon: '💧' },
+  { originId: 'BLR', originName: 'Bengaluru', destId: 'OOT', destName: 'Ooty',   note: 'Nilgiris',      icon: '🌿' },
+  { originId: 'DEL', originName: 'Delhi',     destId: 'SLV', destName: 'Shimla', note: 'Hill station',  icon: '⛰' },
 ];
 
-function greeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
   return 'Good evening';
 }
 
@@ -41,295 +35,190 @@ export function HomeScreen() {
   const navigation = useNavigation<NavProp>();
   const { trips, refresh } = useRecentTrips();
 
-  // Refresh trip history whenever the tab comes into focus
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
+  const recent = trips[0];
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Header row ─────────────────────────────────────────────── */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.greetingSmall}>{greeting()} 👋</Text>
-            <Text style={styles.greetingLarge}>Plan your trip</Text>
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg}/>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <AcclimateLogo size={40} dark={false}/>
+            <View>
+              <Text style={styles.greeting}>{greeting()}</Text>
+              <Text style={styles.name}>Traveler</Text>
+            </View>
           </View>
-          <TouchableOpacity style={styles.settingsBtn} activeOpacity={0.7}>
-            <Text style={styles.settingsIcon}>⚙️</Text>
+          <TouchableOpacity
+            style={styles.bellBtn}
+            onPress={() => navigation.navigate('Notifications' as any)}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 18 }}>🔔</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ── Hero CTA card ───────────────────────────────────────────── */}
+        {/* Hero CTA */}
         <TouchableOpacity
-          style={styles.heroCard}
+          style={styles.hero}
           onPress={() => navigation.navigate('CityPicker')}
           activeOpacity={0.88}
         >
+          <View style={styles.heroBg}/>
           <View style={styles.heroContent}>
-            <View style={styles.heroLeft}>
-              <Text style={styles.heroLabel}>Where are you headed?</Text>
-              <Text style={styles.heroCta}>Plan a new trip</Text>
-              <Text style={styles.heroSub}>30 Indian cities · ERA5 climate data</Text>
-            </View>
-            <View style={styles.heroArrow}>
-              <Text style={styles.heroArrowText}>→</Text>
+            <Text style={styles.heroEyebrow}>Plan a trip</Text>
+            <Text style={styles.heroTitle}>Where are you{'\n'}headed next?</Text>
+            <Text style={styles.heroSub}>Get a personal plan based on your{'\n'}body & the climate difference.</Text>
+            <View style={styles.heroRow}>
+              <Text style={styles.heroCta}>Start now</Text>
+              <View style={styles.heroArrow}>
+                <Text style={{ color: Colors.primary, fontSize: 14, fontWeight: '700' }}>→</Text>
+              </View>
             </View>
           </View>
         </TouchableOpacity>
 
-        {/* ── Recent trips ───────────────────────────────────────────── */}
-        {trips.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>RECENT TRIPS</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.recentRow}
+        {/* Recent trip */}
+        {recent && (
+          <View style={styles.section}>
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionLabel}>CONTINUE</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('CityPicker')}>
+                <Text style={styles.seeAll}>All trips →</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={styles.recentCard}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('CityPicker', {
+                prefillOriginId: recent.originId,
+                prefillOriginName: recent.originName,
+                prefillDestId: recent.destId,
+                prefillDestName: recent.destName,
+                prefillMonth: recent.month,
+              })}
             >
-              {trips.map(trip => (
-                <TouchableOpacity
-                  key={trip.id}
-                  style={styles.recentCard}
-                  activeOpacity={0.8}
-                  onPress={() =>
-                    navigation.navigate('CityPicker')
-                  }
-                >
-                  <Text style={styles.recentRoute} numberOfLines={1}>
-                    {trip.originName} → {trip.destName}
-                  </Text>
-                  <Text style={styles.recentMonth}>{MONTHS[trip.month - 1]}</Text>
-                  <View style={styles.recentBadgeRow}>
-                    <RiskBadge level={trip.overall_risk as RiskLevel} size="sm" />
-                  </View>
-                  <Text style={styles.recentTime}>{relativeTime(trip.timestamp)}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </>
+              <View style={styles.recentTop}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.recentRoute}>{recent.originName} → {recent.destName}</Text>
+                  <Text style={styles.recentMeta}>{MONTHS[recent.month - 1]} · last viewed {relativeTime(recent.timestamp)}</Text>
+                </View>
+                <RiskBadge level={recent.overall_risk as RiskLevel} size="sm"/>
+              </View>
+              <View style={{ marginTop: 14 }}>
+                <RouteArc
+                  origin={{ name: recent.originName, alt: 0 }}
+                  dest={{ name: recent.destName, alt: 0 }}
+                  height={80}
+                  showAlt={false}
+                />
+              </View>
+            </TouchableOpacity>
+          </View>
         )}
 
-        {/* ── Popular routes ──────────────────────────────────────────── */}
-        <Text style={styles.sectionLabel}>POPULAR ROUTES</Text>
-        <View style={styles.popularGrid}>
-          {POPULAR_ROUTES.map(route => (
-            <TouchableOpacity
-              key={`${route.originId}-${route.destId}`}
-              style={styles.popularCard}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('CityPicker')}
-            >
-              <Text style={styles.popularEmoji}>{route.emoji}</Text>
-              <Text style={styles.popularRoute} numberOfLines={1}>
-                {route.originName} → {route.destName}
-              </Text>
-              <Text style={styles.popularTag} numberOfLines={1}>
-                {route.tag}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        {/* Popular routes */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>POPULAR ROUTES</Text>
+          <View style={styles.grid}>
+            {POPULAR_ROUTES.map(r => (
+              <TouchableOpacity
+                key={`${r.originId}-${r.destId}`}
+                style={styles.routeCard}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate('CityPicker', {
+                  prefillOriginId: r.originId, prefillOriginName: r.originName,
+                  prefillDestId: r.destId, prefillDestName: r.destName,
+                })}
+              >
+                <Text style={styles.routeIcon}>{r.icon}</Text>
+                <Text style={styles.routeTitle}>{r.originName} → {r.destName}</Text>
+                <Text style={styles.routeNote}>{r.note}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
-        {/* ── Privacy note ────────────────────────────────────────────── */}
-        <Text style={styles.privacyNote}>
-          All computation runs on your device. No health data shared.
-        </Text>
+        <View style={{ height: 14 }}/>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function relativeTime(ts: number): string {
-  const diffMs = Date.now() - ts;
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay}d ago`;
+function relativeTime(ts: number) {
+  const d = Math.floor((Date.now() - ts) / 86400000);
+  if (d < 1) return 'today';
+  if (d === 1) return '1d ago';
+  return `${d}d ago`;
 }
 
 const styles = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: Colors.bg },
   scroll: { paddingBottom: Spacing.xxl },
 
-  // Header
-  headerRow: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    justifyContent:    'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingTop:        Spacing.md,
-    paddingBottom:     Spacing.lg,
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4,
   },
-  greetingSmall: {
-    fontSize:   Font.size.sm,
-    color:      Colors.textMuted,
-    marginBottom: 4,
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  greeting:   { fontSize: 12, color: Colors.inkFaint, letterSpacing: 0.3 },
+  name:       { fontSize: 20, fontWeight: '500', color: Colors.ink },
+  bellBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.line,
+    alignItems: 'center', justifyContent: 'center',
   },
-  greetingLarge: {
-    fontSize:   Font.size.xxl,
-    fontWeight: Font.weight.bold,
-    color:      Colors.text,
-  },
-  settingsBtn: {
-    width:           40,
-    height:          40,
-    borderRadius:    20,
-    backgroundColor: Colors.card,
-    alignItems:      'center',
-    justifyContent:  'center',
-    shadowColor:     '#000',
-    shadowOpacity:   0.06,
-    shadowRadius:    8,
-    shadowOffset:    { width: 0, height: 2 },
-    elevation:       2,
-  },
-  settingsIcon: { fontSize: 18 },
 
-  // Hero card
-  heroCard: {
-    backgroundColor: Colors.hero,
-    borderRadius:    Radius.xl,
-    marginHorizontal: Spacing.lg,
-    marginBottom:    Spacing.xl,
-    shadowColor:     Colors.primary,
-    shadowOpacity:   0.4,
-    shadowRadius:    16,
-    shadowOffset:    { width: 0, height: 6 },
-    elevation:       8,
+  hero: {
+    marginHorizontal: 20, marginTop: 8, borderRadius: 24,
+    backgroundColor: Colors.primary, overflow: 'hidden',
   },
-  heroContent: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    padding:        Spacing.lg,
-    paddingVertical: Spacing.xl,
+  heroBg: {
+    position: 'absolute', top: -40, right: -40, width: 180, height: 180,
+    borderRadius: 90,
+    backgroundColor: Colors.bright, opacity: 0.15,
   },
-  heroLeft: {
-    flex: 1,
+  heroContent: { padding: 22 },
+  heroEyebrow: {
+    fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.7)', marginBottom: 8,
   },
-  heroLabel: {
-    fontSize:   Font.size.sm,
-    color:      Colors.bright,
-    marginBottom: 6,
-    fontWeight: Font.weight.medium,
+  heroTitle: {
+    fontSize: 26, lineHeight: 30, fontWeight: '500',
+    color: '#F6F3EC', marginBottom: 10,
   },
-  heroCta: {
-    fontSize:   Font.size.xl,
-    fontWeight: Font.weight.bold,
-    color:      Colors.textOnDark,
-    marginBottom: 8,
-  },
-  heroSub: {
-    fontSize: Font.size.xs,
-    color:    'rgba(255,255,255,0.5)',
-  },
+  heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 20, marginBottom: 22 },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroCta: { fontSize: 13, fontWeight: '600', color: Colors.bright },
   heroArrow: {
-    width:           44,
-    height:          44,
-    borderRadius:    22,
-    backgroundColor: Colors.mid,
-    alignItems:      'center',
-    justifyContent:  'center',
-    marginLeft:      Spacing.md,
-  },
-  heroArrowText: {
-    fontSize:   Font.size.xl,
-    color:      Colors.textOnDark,
-    fontWeight: Font.weight.bold,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: Colors.bright, alignItems: 'center', justifyContent: 'center',
   },
 
-  // Section labels
-  sectionLabel: {
-    fontSize:          Font.size.xs,
-    fontWeight:        Font.weight.bold,
-    color:             Colors.textMuted,
-    letterSpacing:     0.8,
-    marginBottom:      Spacing.md,
-    marginTop:         Spacing.xs,
-    paddingHorizontal: Spacing.lg,
-  },
+  section: { paddingHorizontal: 20, paddingTop: 20 },
+  sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  sectionLabel: { fontSize: 11, color: Colors.inkFaint, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '600' },
+  seeAll: { fontSize: 12, color: Colors.mid, fontWeight: '500' },
 
-  // Recent trips
-  recentRow: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom:     Spacing.lg,
-    gap:               Spacing.md,
-  },
   recentCard: {
-    backgroundColor: Colors.card,
-    borderRadius:    Radius.lg,
-    padding:         Spacing.md,
-    width:           160,
-    shadowColor:     '#000',
-    shadowOpacity:   0.05,
-    shadowRadius:    8,
-    shadowOffset:    { width: 0, height: 2 },
-    elevation:       2,
+    backgroundColor: Colors.surface, borderRadius: 18,
+    borderWidth: 1, borderColor: Colors.line, padding: 16,
   },
-  recentRoute: {
-    fontSize:    Font.size.sm,
-    fontWeight:  Font.weight.semibold,
-    color:       Colors.text,
-    marginBottom: 4,
-  },
-  recentMonth: {
-    fontSize:    Font.size.xs,
-    color:       Colors.textMuted,
-    marginBottom: 8,
-  },
-  recentBadgeRow: {
-    marginBottom: 8,
-  },
-  recentTime: {
-    fontSize: Font.size.xs,
-    color:    Colors.textLight,
-  },
+  recentTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  recentRoute: { fontSize: 18, fontWeight: '500', color: Colors.ink },
+  recentMeta:  { fontSize: 11, color: Colors.inkFaint, marginTop: 4 },
 
-  // Popular routes grid
-  popularGrid: {
-    flexDirection:     'row',
-    flexWrap:          'wrap',
-    paddingHorizontal: Spacing.lg,
-    gap:               Spacing.md,
-    marginBottom:      Spacing.lg,
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  routeCard: {
+    width: '47.5%', backgroundColor: Colors.surface,
+    borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: Colors.line,
   },
-  popularCard: {
-    backgroundColor: Colors.card,
-    borderRadius:    Radius.lg,
-    padding:         Spacing.md,
-    width:           '47%',
-    shadowColor:     '#000',
-    shadowOpacity:   0.05,
-    shadowRadius:    8,
-    shadowOffset:    { width: 0, height: 2 },
-    elevation:       2,
-  },
-  popularEmoji: {
-    fontSize:    24,
-    marginBottom: 8,
-  },
-  popularRoute: {
-    fontSize:    Font.size.sm,
-    fontWeight:  Font.weight.semibold,
-    color:       Colors.text,
-    marginBottom: 4,
-  },
-  popularTag: {
-    fontSize: Font.size.xs,
-    color:    Colors.textMuted,
-  },
-
-  // Privacy note
-  privacyNote: {
-    fontSize:   Font.size.xs,
-    color:      Colors.textLight,
-    textAlign:  'center',
-    paddingHorizontal: Spacing.xl,
-    marginTop:  Spacing.md,
-  },
+  routeIcon:  { fontSize: 20, marginBottom: 10 },
+  routeTitle: { fontSize: 15, fontWeight: '500', color: Colors.ink, lineHeight: 19 },
+  routeNote:  { fontSize: 11, color: Colors.inkFaint, marginTop: 4 },
 });
