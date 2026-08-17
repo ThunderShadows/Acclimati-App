@@ -8,3 +8,4 @@ dist/
 # Seeder output — commit only after manual review
 apps/seeder/output/cities.json
 
+apps/mobile/.expo/
